@@ -99,3 +99,7 @@ Detailed architectural and technical guides:
 * [DATA_MODEL.md](file:///d:/SIH-Project/DATA_MODEL.md) — Entities, relationships, and JSON schema definitions.
 * [API.md](file:///d:/SIH-Project/API.md) — Internal service contracts and extension hooks.
 * [SETUP.md](file:///d:/SIH-Project/SETUP.md) — Step-by-step setup, configuration, and model customization guide.
+
+## Python Server 
+
+python -m uvicorn app.main:app --port 8000
