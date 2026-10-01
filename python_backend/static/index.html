@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Cinderbound / AI Extraction</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0b0f14; color: #edf4f7; font-family: Segoe UI, Arial, sans-serif; }
+    header { height: 70px; border-bottom: 1px solid #25313d; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; }
+    .brand { font-size: 20px; font-weight: 800; }
+    .brand i { color: #65e1b1; font-style: normal; }
+    .sub { font-size: 12px; color: #8fa0ae; margin-top: 3px; }
+    .status { font-size: 12px; color: #8fa0ae; border: 1px solid #263541; border-radius: 20px; padding: 8px 12px; }
+    main { height: calc(100vh - 70px); display: grid; grid-template-columns: 40% 60%; gap: 1px; background: #25313d; }
+    .pane { background: #10171f; padding: 25px; min-width: 0; overflow: hidden; }
+    .left { display: flex; flex-direction: column; }
+    .desc { color: #91a1ae; font-size: 13px; line-height: 1.55; margin: 7px 0 22px; }
+    .drop { border: 1px dashed #415363; border-radius: 15px; padding: 35px 15px; text-align: center; background: #0d141b; cursor: pointer; display: block; transition: border-color 0.2s, background 0.2s; }
+    .drop.dragover { border-color: #65e1b1; background: #132223; }
+    .drop b { display: block; margin-bottom: 7px; }
+    .drop span { font-size: 12px; color: #8fa0ae; }
+    .files { flex: 1; overflow: auto; margin: 16px 0; }
+    .file { border: 1px solid #263541; background: #0c131a; border-radius: 9px; padding: 10px 12px; margin: 7px 0; font-size: 13px; }
+    .actions { display: flex; gap: 9px; }
+    button { border: 0; border-radius: 9px; padding: 12px 16px; font-weight: 800; background: #65e1b1; color: #07120d; cursor: pointer; transition: opacity 0.2s; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .secondary { background: #19242e; color: #edf4f7; border: 1px solid #293845; }
+    .out { padding: 0; display: flex; flex-direction: column; }
+    .outhead { height: 62px; padding: 16px 20px; border-bottom: 1px solid #25313d; display: flex; align-items: center; justify-content: space-between; }
+    .outbody { flex: 1; overflow: auto; padding: 20px; }
+    pre { margin: 0; min-height: 100%; padding: 18px; border: 1px solid #263541; border-radius: 13px; background: #080d12; color: #dce7ec; font: 12px/1.6 Consolas, monospace; white-space: pre-wrap; }
+    @media (max-width: 850px) {
+      main { grid-template-columns: 1fr; height: auto; }
+      .out { min-height: 650px; }
+      .left { min-height: 500px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="brand">Cinderbound <i>/ AI Extraction</i></div>
+      <div class="sub">Document → identify → restructure → JSON</div>
+    </div>
+    <div id="status" class="status">Ready</div>
+  </header>
+  <main>
+    <section class="pane left">
+      <h2 style="margin:0">Input</h2>
+      <div class="desc">Upload your documents. Nothing is stored. The agent extracts text/OCR, identifies the format, restructures the information and returns source-grounded JSON.</div>
+      <label class="drop" for="pick">
+        <b>Drop files here or click to upload</b>
+        <span>PDF · Images · DOCX · TXT · CSV · XLSX</span>
+      </label>
+      <input id="pick" type="file" multiple hidden accept=".pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff,.bmp,.docx,.txt,.md,.log,.csv,.xlsx">
+      <div id="files" class="files"><span style="color:#8fa0ae;font-size:13px">No files selected.</span></div>
+      <div class="actions">
+        <button id="run" disabled>Extract to JSON</button>
+        <button id="clear" class="secondary">Clear</button>
+      </div>
+    </section>
+    <section class="pane out">
+      <div class="outhead">
+        <b>Output JSON</b>
+        <button id="copy" class="secondary">Copy JSON</button>
+      </div>
+      <div class="outbody">
+        <pre id="out">{
+  "results": []
+}</pre>
+      </div>
+    </section>
+  </main>
+  <script>
+    const pick = document.getElementById('pick');
+    const dropArea = document.querySelector('.drop');
+    const files = document.getElementById('files');
+    const run = document.getElementById('run');
+    const clear = document.getElementById('clear');
+    const out = document.getElementById('out');
+    const copy = document.getElementById('copy');
+    const status = document.getElementById('status');
+    const DEFAULT_JSON = '{\\n  "results": []\\n}';
+
+    let selected = [];
+
+    function render() {
+      files.innerHTML = '';
+      if (!selected.length) {
+        files.innerHTML = '<span style="color:#8fa0ae;font-size:13px">No files selected.</span>';
+        run.disabled = true;
+        return;
+      }
+      selected.forEach(f => {
+        let d = document.createElement('div');
+        d.className = 'file';
+        d.textContent = f.name + ' — ' + (f.size / 1024).toFixed(1) + ' KB';
+        files.appendChild(d);
+      });
+      run.disabled = false;
+    }
+
+    pick.onchange = () => {
+      if (pick.files && pick.files.length) {
+        selected = [...pick.files];
+        render();
+      }
+    };
+
+    // Prevent default window drag/drop behavior to avoid accidental file opening
+    window.addEventListener('dragover', e => e.preventDefault(), false);
+    window.addEventListener('drop', e => e.preventDefault(), false);
+
+    // Dropzone highlight & handling
+    dropArea.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropArea.classList.add('dragover');
+    });
+    dropArea.addEventListener('dragleave', e => {
+      e.preventDefault();
+      dropArea.classList.remove('dragover');
+    });
+    dropArea.addEventListener('drop', e => {
+      e.preventDefault();
+      dropArea.classList.remove('dragover');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+        selected = [...e.dataTransfer.files];
+        render();
+      }
+    });
+
+    clear.onclick = () => {
+      selected = [];
+      pick.value = '';
+      out.textContent = '{\\n  "results": []\\n}';
+      status.textContent = 'Ready';
+      render();
+    };
+
+    copy.onclick = () => {
+      navigator.clipboard.writeText(out.textContent).then(() => {
+        const prev = status.textContent;
+        status.textContent = 'Copied';
+        setTimeout(() => { status.textContent = prev; }, 1500);
+      });
+    };
+
+    run.onclick = async () => {
+      if (!selected.length) return;
+      let fd = new FormData();
+      selected.forEach(f => fd.append('files', f));
+      run.disabled = true;
+      status.textContent = 'Processing…';
+      out.textContent = 'Extracting…';
+      try {
+        let r = await fetch('/api/extract', { method: 'POST', body: fd });
+        let data = await r.json();
+        out.textContent = JSON.stringify(data, null, 2);
+        if (!r.ok) {
+          status.textContent = 'Error';
+        } else {
+          const hasError = data.results && data.results.some(item => item.error);
+          status.textContent = hasError ? 'Completed with errors' : 'Complete';
+        }
+      } catch (e) {
+        out.textContent = JSON.stringify({ error: e.message }, null, 2);
+        status.textContent = 'Error';
+      } finally {
+        run.disabled = selected.length === 0;
+      }
+    };
+
+    render();
+  </script>
+</body>
+</html>
